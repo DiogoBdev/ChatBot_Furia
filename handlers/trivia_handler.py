@@ -1,13 +1,14 @@
 import json
 import random
+import os
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 
-# Carrega as perguntas de trivia do arquivo JSON
-with open("trivia.json", "r", encoding="utf-8") as f:
-    perguntas = json.load(f)
+# Carrega perguntas do JSON (ajusta o path conforme sua estrutura)
+BASE = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(BASE, "..", "trivia.json"), encoding="utf-8") as f:
+    todas_perguntas = json.load(f)
 
-# Frases de acerto e erro
 frases_acerto = [
     "🔥 É isso! Tá afiado igual o arT!",
     "🎯 Bala certeira! Bora que bora!",
@@ -20,35 +21,51 @@ frases_erro = [
     "📉 Pega visão e tenta de novo, FURIOSO!"
 ]
 
-# Função para iniciar a trivia
 async def iniciar_trivia(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pergunta = random.choice(perguntas)  # Escolhe uma pergunta aleatória
-    
-    # Cria as opções como botões
-    teclado = [[opt] for opt in pergunta["opcoes"]]  # Cada opção em uma linha
+    # Embaralha e armazena a lista
+    perguntas = todas_perguntas.copy()
+    random.shuffle(perguntas)
+    context.user_data["trivia_list"] = perguntas
+    context.user_data["trivia_idx"] = 0
+    context.user_data["score"] = 0
+
+    # Envia a primeira pergunta
+    await _enviar_pergunta(update, context)
+
+async def _enviar_pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    idx = context.user_data["trivia_idx"]
+    perguntas = context.user_data["trivia_list"]
+    pergunta = perguntas[idx]
+
+    # Teclado de opções
+    teclado = [[opt] for opt in pergunta["opcoes"]]
     markup = ReplyKeyboardMarkup(teclado, one_time_keyboard=True, resize_keyboard=True)
-    
-    # Armazena a pergunta atual
-    context.user_data["pergunta_atual"] = pergunta
-    
-    # Envia a pergunta com as opções de resposta como botões
+
+    # Envia a pergunta
     await update.message.reply_text(
         f"🧠 *{pergunta['pergunta']}*",
         parse_mode="Markdown",
         reply_markup=markup
     )
 
-# Função para verificar a resposta do usuário
 async def verificar_resposta(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pergunta_atual = context.user_data.get("pergunta_atual")
-    if not pergunta_atual:
-        return  # Se não houver pergunta atual, retorna
+    # Se não estiver no meio de uma trivia, ignora
+    if "trivia_list" not in context.user_data:
+        return
+
+    idx = context.user_data["trivia_idx"]
+    perguntas = context.user_data["trivia_list"]
+    pergunta = perguntas[idx]
+    resposta_certa = pergunta["resposta_certa"]
 
     resposta_usuario = update.message.text.strip()
-    resposta_certa = pergunta_atual["resposta_certa"]
 
-    # Verifica se a resposta do usuário é correta
-    if resposta_usuario.lower() == resposta_certa.lower():
+    # Comparação (insensível a maiúsculas)
+    acertou = resposta_usuario.lower() == resposta_certa.lower()
+
+    # Responde acerto/erro
+    if acertou:
+        context.user_data["score"] += 1
         await update.message.reply_text(f"✅ {random.choice(frases_acerto)}")
     else:
         await update.message.reply_text(
@@ -56,10 +73,20 @@ async def verificar_resposta(update: Update, context: ContextTypes.DEFAULT_TYPE)
             parse_mode="Markdown"
         )
 
-    # Limpa o estado da pergunta atual
-    context.user_data.clear()
-    # Remove o teclado após a resposta
-    await update.message.reply_text(
-        "✅ Trivia finalizada!",
-        reply_markup=ReplyKeyboardRemove()  # Remove o teclado de opções
-    )
+    # Avança índice
+    context.user_data["trivia_idx"] += 1
+
+    # Próxima pergunta ou fim de trivia
+    if context.user_data["trivia_idx"] < len(perguntas):
+        await _enviar_pergunta(update, context)
+    else:
+        score = context.user_data["score"]
+        total = len(perguntas)
+        # Finaliza e remove teclado
+        await update.message.reply_text(
+            f"🏁 Quiz concluído! Você acertou {score}/{total}.",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        # Limpa estado
+        for key in ("trivia_list", "trivia_idx", "score"):
+            context.user_data.pop(key, None)

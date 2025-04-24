@@ -6,12 +6,14 @@ import requests
 import feedparser
 from bs4 import BeautifulSoup
 from handlers.trivia_handler import iniciar_trivia, verificar_resposta
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+import numpy as np
+from grafico_ranking import gerar_grafico_ranking
 
-# Carregar variáveis de ambiente
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Menu principal
 main_menu = [
     ["🗞️ Últimas Notícias", "👥 Escalação"],
     ["📆 Agenda de Jogos", "💡 Curiosidades"],
@@ -19,7 +21,6 @@ main_menu = [
 ]
 markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True)
 
-# Funções de serviço
 def buscar_noticias_furia():
     feed = feedparser.parse("https://www.hltv.org/rss/news")
     noticias = [
@@ -29,27 +30,33 @@ def buscar_noticias_furia():
     ]
     return noticias[:5] or ["📭 Nenhuma notícia recente da FURIA encontrada."]
 
-def buscar_ranking_furia():
-    try:
-        html = requests.get(
-            "https://www.hltv.org/ranking/teams",
-            headers={"User-Agent": "Mozilla/5.0"}
-        ).text
-        soup = BeautifulSoup(html, "html.parser")
-        for i, team in enumerate(soup.select(".ranked-team"), 1):
-            name = team.select_one(".teamLine .name")
-            if name and "FURIA" in name.text.upper():
-                pontos = (
-                    team.select_one(".points").text
-                    if team.select_one(".points")
-                    else "sem dados"
-                )
-                return f"🏆 A FURIA está em {i}º lugar no ranking HLTV com {pontos}!"
-    except Exception as e:
-        return f"⚠️ Erro ao acessar ranking: {e}"
-    return "📉 A FURIA não está entre as 30 primeiras do ranking HLTV."
+def gerar_grafico_ranking():
+    teams = ['Vitality', 'FaZe', 'G2', 'FURIA', 'NAVI', 'Cloud9', 'Astralis', 'Liquid', 'ENCE', 'Heroic']
+    points = [950, 910, 875, 830, 800, 790, 760, 730, 710, 690]
 
-# Handlers de comando
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars = ax.barh(teams[::-1], points[::-1], color=['#ffffff' if team != 'FURIA' else '#FF0000' for team in teams[::-1]])
+
+    for bar, team in zip(bars, teams[::-1]):
+        if team == 'FURIA':
+            bar.set_color('#FF0000')
+
+    ax.set_title('Top 10 Times - Ranking HLTV', fontsize=16, color='white', pad=20)
+    ax.set_xlabel('Pontos', fontsize=12, color='white')
+    ax.tick_params(colors='white', labelsize=10)
+    fig.tight_layout()
+
+    logo_path = "furia_logo_simples.png"
+    if os.path.exists(logo_path):
+        logo = mpimg.imread(logo_path)
+        fig.figimage(logo, xo=fig.bbox.xmax - 150, yo=fig.bbox.ymax - 100, alpha=0.6, zorder=10)
+
+    output_path = "grafico_furia_rank_custom.png"
+    plt.savefig(output_path, bbox_inches='tight', dpi=150)
+    plt.close()
+    return output_path
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🔥 Seja bem-vindo ao *Bot da FURIA*!\n\nO que você quer saber hoje, FURIOSO? 👊",
@@ -58,9 +65,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def handle_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Trata as opções do menu principal."""
     msg = update.message.text
-
     if "Últimas Notícias" in msg:
         for n in buscar_noticias_furia():
             await update.message.reply_text(n)
@@ -71,28 +76,27 @@ async def handle_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif "Agenda" in msg:
         await update.message.reply_text("📆 Próximo jogo: FURIA vs. NAVI - 26/04 às 15h")
     elif "Curiosidades" in msg:
-        await update.message.reply_text(
-            "💡 A FURIA foi a 1ª equipe BR no top 3 do HLTV em 2020."
-        )
+        await update.message.reply_text("💡 A FURIA foi a 1ª equipe BR no top 3 do HLTV em 2020.")
     elif "Trivia" in msg:
         await iniciar_trivia(update, context)
     elif "Ranking" in msg:
-        await update.message.reply_text(buscar_ranking_furia())
+        await update.message.reply_text("⏳ Gerando gráfico de ranking, segura aí...")
+        try:
+            imagem = gerar_grafico_ranking()
+            with open(imagem, "rb") as img:
+                await update.message.reply_photo(photo=img, caption="📊 Ranking HLTV atualizado!")
+        except Exception as e:
+            await update.message.reply_text(f"⚠️ Erro ao gerar ranking: {e}")
 
-# Handler geral que decide entre menu ou trivia
 async def texto_geral(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Se existe pergunta de trivia ativa, verifica a resposta
-    if context.user_data.get("pergunta_atual"):
-        return await verificar_resposta(update, context)
-    # Senão, trata como menu
-    return await handle_response(update, context)
+    if context.user_data.get("trivia_list"):
+        await verificar_resposta(update, context)
+    else:
+        await handle_response(update, context)
 
-# Montagem e inicialização do bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
-app.add_handler(
-    MessageHandler(filters.TEXT & ~filters.COMMAND, texto_geral)
-)
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, texto_geral))
 
-print("🤖 Bot da FURIA rodando com estilo!")
+print("🤖 Bot da FURIA rodando!")
 app.run_polling()
