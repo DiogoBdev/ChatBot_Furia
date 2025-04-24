@@ -5,12 +5,12 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import feedparser
+from handlers.trivia_handler import iniciar_trivia, verificar_resposta  # Importando os handlers de trivia
 
-# Carregar variáveis de ambiente
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Menu principal
+
 main_menu = [
     ["1️⃣ Últimas Notícias", "2️⃣ Escalação"],
     ["3️⃣ Agenda de Jogos", "4️⃣ Curiosidades"],
@@ -18,7 +18,6 @@ main_menu = [
 ]
 markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True)
 
-# Últimas notícias da FURIA via RSS
 def buscar_noticias_furia():
     feed = feedparser.parse("https://www.hltv.org/rss/news")
     noticias = []
@@ -29,7 +28,6 @@ def buscar_noticias_furia():
             break
     return noticias or ["📭 Nenhuma notícia recente da FURIA encontrada."]
 
-# Ranking da FURIA no HLTV
 def buscar_ranking_furia():
     url = "https://www.hltv.org/ranking/teams"
     headers = {
@@ -54,14 +52,12 @@ def buscar_ranking_furia():
 
     return "📉 A FURIA não está entre as 30 primeiras do ranking HLTV atualmente."
 
-# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Olá, fã da FURIA! O que você quer saber hoje?",
         reply_markup=markup
     )
 
-# Menu
 async def handle_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text
 
@@ -81,17 +77,19 @@ async def handle_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔥 Você sabia? A FURIA foi a 1ª equipe BR no top 3 do ranking HLTV em 2020.")
 
     elif "Trivia" in msg:
-        await update.message.reply_text("❓ Trivia em breve! Prepare-se para testar seus conhecimentos.")
+        await iniciar_trivia(update, context)
 
     elif "Ranking" in msg:
         await update.message.reply_text("📊 Consultando ranking da FURIA...")
         ranking = buscar_ranking_furia()
         await update.message.reply_text(ranking)
 
-# Criar app
+
 app = ApplicationBuilder().token(BOT_TOKEN).build()
+
 app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_response))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, verificar_resposta))  # Verificar respostas da trivia
 
 # Rodar bot
 print("🤖 Bot da FURIA rodando...")

@@ -1,0 +1,17 @@
+[
+    {
+        "pergunta": "Em que ano a FURIA estreou em um Major?",
+        "opcoes": ["2017", "2018", "2019"],
+        "resposta": 2
+    },
+    {
+        "pergunta": "Quem foi o primeiro jogador a ser campeão com a FURIA no Major?",
+        "opcoes": ["FalleN", "coldzera", "KSCERATO"],
+        "resposta": "coldzera"
+    },
+    {
+        "pergunta": "Qual é o nome do coach da FURIA?",
+        "opcoes": ["Guerri", "zews", "fer"],
+        "resposta": "Guerri"
+    }
+]
