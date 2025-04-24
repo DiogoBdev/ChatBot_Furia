@@ -1,73 +1,49 @@
-import random
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ContextTypes
 import json
+import random
+from telegram import Update
+from telegram.ext import ContextTypes
 
-def carregar_perguntas():
-    with open('data/trivia_questions.json', 'r', encoding='utf-8') as f:
-        return json.load(f)
+# Carrega perguntas do JSON
+with open("trivia.json", "r", encoding="utf-8") as f:
+    perguntas = json.load(f)
+
+frases_acerto = [
+    "🔥 É isso! Tá afiado igual o arT!",
+    "🎯 Bala certeira! Bora que bora!",
+    "🏆 Essa foi de MVP!"
+]
+
+frases_erro = [
+    "💔 Essa passou raspando!",
+    "😓 Não foi dessa vez, mas a próxima é nossa!",
+    "📉 Pega visão e tenta de novo, FURIOSO!"
+]
 
 async def iniciar_trivia(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    perguntas = carregar_perguntas()
-    random.shuffle(perguntas)
-    context.user_data['trivia'] = perguntas
-    context.user_data['idx'] = 0
-    context.user_data['score'] = 0
+    pergunta = random.choice(perguntas)
+    opcoes = "\n".join([f"{idx + 1}. {op}" for idx, op in enumerate(pergunta["opcoes"])])
 
-    await enviar_pergunta(update, context)
+    context.user_data["pergunta_atual"] = pergunta
 
-async def enviar_pergunta(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    idx = context.user_data['idx']
-    perguntas = context.user_data['trivia']
-    pergunta_obj = perguntas[idx]
-
-    teclado = [[f"{i+1}. {opt}"] for i, opt in enumerate(pergunta_obj['opcoes'])]
-    markup = ReplyKeyboardMarkup(teclado, resize_keyboard=True)
-
-    texto = f"{pergunta_obj['pergunta']}\n\n" + \
-            "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(pergunta_obj['opcoes'])])
-
-    await update.message.reply_text(texto, reply_markup=markup)
+    await update.message.reply_text(
+        f"🧠 *{pergunta['pergunta']}*\n\n{opcoes}",
+        parse_mode="Markdown"
+    )
 
 async def verificar_resposta(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    if 'trivia' not in context.user_data:
+    pergunta_atual = context.user_data.get("pergunta_atual")
+    if not pergunta_atual:
         return
 
-    texto = update.message.text.strip()
-    idx = context.user_data['idx']
-    perguntas = context.user_data['trivia']
-    pergunta_obj = perguntas[idx]
+    resposta_usuario = update.message.text.strip()
+    resposta_certa = pergunta_atual["resposta_certa"]
 
-
-    correta = pergunta_obj['resposta']
-
-    if isinstance(correta, int):
-        correta_texto = pergunta_obj['opcoes'][correta]
+    if resposta_usuario.lower() == resposta_certa.lower() or resposta_usuario == str(pergunta_atual["opcoes"].index(resposta_certa) + 1):
+        await update.message.reply_text(f"✅ {random.choice(frases_acerto)}")
     else:
-        correta_texto = str(correta)
+        await update.message.reply_text(
+            f"❌ {random.choice(frases_erro)}\nA resposta certa era: *{resposta_certa}*",
+            parse_mode="Markdown"
+        )
 
-    if texto and texto[0].isdigit():
-        escolha = int(texto.split('.')[0]) - 1
-        resposta_texto = pergunta_obj['opcoes'][escolha] if 0 <= escolha < len(pergunta_obj['opcoes']) else None
-    else:
-        resposta_texto = texto
-
-    if resposta_texto == correta_texto:
-        context.user_data['score'] += 1
-        await update.message.reply_text("✅ Resposta certa!")
-    else:
-        await update.message.reply_text(f"❌ Resposta errada. A resposta certa era: {correta_texto}")
-
-
-    context.user_data['idx'] += 1
-    if context.user_data['idx'] < len(perguntas):
-        await enviar_pergunta(update, context)
-    else:
-
-        score = context.user_data['score']
-        total = len(perguntas)
-        await update.message.reply_text(f"🏁 Quiz concluído! Você acertou {score}/{total}.")
-
-        for key in ['trivia', 'idx', 'score']:
-            context.user_data.pop(key, None)
+    context.user_data.clear()
