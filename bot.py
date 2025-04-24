@@ -7,7 +7,6 @@ import feedparser
 from bs4 import BeautifulSoup
 from handlers.trivia_handler import iniciar_trivia, verificar_resposta
 
-# Variáveis e setup
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
@@ -18,13 +17,11 @@ main_menu = [
 ]
 markup = ReplyKeyboardMarkup(main_menu, resize_keyboard=True)
 
-# Notícias da FURIA
 def buscar_noticias_furia():
     feed = feedparser.parse("https://www.hltv.org/rss/news")
     noticias = [f"📰 {entry.title}\n🔗 {entry.link}" for entry in feed.entries if "FURIA" in entry.title.upper()]
     return noticias[:5] or ["📭 Nenhuma notícia recente da FURIA encontrada."]
 
-# Ranking da FURIA
 def buscar_ranking_furia():
     try:
         html = requests.get("https://www.hltv.org/ranking/teams", headers={"User-Agent": "Mozilla/5.0"}).text
@@ -38,7 +35,6 @@ def buscar_ranking_furia():
         return f"⚠️ Erro ao acessar ranking: {str(e)}"
     return "📉 A FURIA não está entre as 30 primeiras do ranking HLTV."
 
-# Comando /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🔥 Seja bem-vindo ao *Bot da FURIA*!\n\nO que você quer saber hoje, FURIOSO? 👊",
@@ -46,7 +42,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=markup
     )
 
-# Menu principal
 async def handle_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text
 
@@ -64,7 +59,6 @@ async def handle_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif "Ranking" in msg:
         await update.message.reply_text(buscar_ranking_furia())
 
-# Iniciar o bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_response))

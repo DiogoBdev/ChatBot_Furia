@@ -3,7 +3,6 @@ import random
 from telegram import Update
 from telegram.ext import ContextTypes
 
-# Carrega perguntas do JSON
 with open("trivia.json", "r", encoding="utf-8") as f:
     perguntas = json.load(f)
 
