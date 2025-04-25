@@ -1,35 +1,50 @@
 import matplotlib.pyplot as plt
 import requests
 from bs4 import BeautifulSoup
-import os
+import io
+from telegram import InputFile, Update
+from telegram.ext import ContextTypes
 
-def gerar_grafico_ranking(path_saida="ranking_furia.png"):
-    url = "https://www.hltv.org/ranking/teams"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    html = requests.get(url, headers=headers).text
-    soup = BeautifulSoup(html, "html.parser")
+async def gerar_grafico_ranking(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        # Requisição ao site da HLTV para pegar o ranking
+        html = requests.get(
+            "https://www.hltv.org/ranking/teams",
+            headers={"User-Agent": "Mozilla/5.0"}
+        ).text
+        soup = BeautifulSoup(html, "html.parser")
 
-    times = []
-    pontos = []
+        equipes = []
+        pontos = []
+        for i, team in enumerate(soup.select(".ranked-team"), 1):
+            name = team.select_one(".teamLine .name")
+            if name:
+                equipes.append(name.text.strip())
+                points = team.select_one(".points").text.strip()
+                pontos.append(int(points.replace(",", "")) if points != "sem dados" else 0)
 
-    for team in soup.select(".ranked-team")[:10]:
-        nome = team.select_one(".name").text.strip()
-        pts = team.select_one(".points").text.strip().replace(" points", "")
-        times.append(nome)
-        pontos.append(int(pts))
+            if len(equipes) >= 10:  # Limita a exibição para as 10 primeiras equipes
+                break
 
-    cores = ["#000000" if "FURIA" not in nome.upper() else "#00ff00" for nome in times]
+        # Criação do gráfico de barras
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.barh(equipes, pontos, color='gold')
 
-    plt.figure(figsize=(10, 6))
-    bars = plt.barh(times[::-1], pontos[::-1], color=cores[::-1])
-    plt.title("Top 10 Ranking HLTV - Destaque para FURIA", fontsize=14, fontweight="bold", color="#000000")
-    plt.xlabel("Pontos", fontsize=12)
-    plt.tight_layout()
+        # Personaliza o gráfico para a FURIA
+        if 'FURIA' in equipes:
+            idx_furia = equipes.index('FURIA')
+            ax.barh(idx_furia, pontos[idx_furia], color='blue')
 
-    for bar in bars:
-        width = bar.get_width()
-        plt.text(width + 10, bar.get_y() + bar.get_height()/2, str(width), va='center', fontsize=10)
+        ax.set_xlabel('Pontos')
+        ax.set_title('Ranking das Equipes - HLTV')
 
-    plt.savefig(path_saida, dpi=150)
-    plt.close()
-    return path_saida
+        # Salva o gráfico em um buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        buf.seek(0)
+
+        # Envia a imagem para o Telegram
+        await update.message.reply_photo(photo=InputFile(buf, filename="ranking_furia.png"))
+
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Erro ao acessar o ranking: {str(e)}")
